@@ -12,6 +12,10 @@ class FakeFred:
             "value": [2.5, 2.7, 2.8],
         })
 
+    def get_series(self, series_id):
+        idx = pd.to_datetime(["2020-05-01", "2020-06-01"])
+        return pd.Series([2.5, 2.8], index=idx)
+
 def test_fetch_fred_takes_first_release():
     df = fetch_fred_series("CPIAUCSL", client=FakeFred())
     assert list(df.columns) == ["date", "series_id", "value", "release_date"]
@@ -24,6 +28,8 @@ def test_fetch_fred_empty_raises():
     class Empty:
         def get_series_all_releases(self, _):
             return pd.DataFrame(columns=["date", "realtime_start", "value"])
+        def get_series(self, _):
+            return pd.Series(dtype=float)
     with pytest.raises(ValueError, match="Empty"):
         fetch_fred_series("DGS10", client=Empty())
 

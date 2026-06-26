@@ -18,6 +18,10 @@ class FakeFred:
             "value": [1.5],
         })
 
+    def get_series(self, series_id):
+        idx = pd.to_datetime(["2020-01-02"])
+        return pd.Series([1.5], index=idx)
+
 def test_run_ingestion_writes_each_table(monkeypatch):
     written = {}
     def fake_upsert(engine, df, table, schema, pk):
