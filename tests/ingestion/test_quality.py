@@ -27,3 +27,13 @@ def test_check_macro_flags_null_key():
     df = pd.DataFrame({"date": [None], "series_id": ["DGS10"], "value": [1.0], "release_date": [None]})
     with pytest.raises(DataQualityError, match="NULL"):
         check_macro(df)
+
+def test_check_macro_flags_null_release_date():
+    df = pd.DataFrame({
+        "date": pd.to_datetime(["2020-01-01"]),
+        "series_id": ["DGS10"],
+        "value": [1.0],
+        "release_date": [None],
+    })
+    with pytest.raises(DataQualityError, match="NULL"):
+        check_macro(df)
