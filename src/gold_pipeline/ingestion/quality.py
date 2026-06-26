@@ -36,5 +36,5 @@ def check_gold(df: pd.DataFrame) -> None:
 
 
 def check_macro(df: pd.DataFrame) -> None:
-    _require_no_nulls(df, ["date", "series_id"])
+    _require_no_nulls(df, ["date", "series_id", "release_date"])
     _require_no_duplicates(df, ["date", "series_id"])
