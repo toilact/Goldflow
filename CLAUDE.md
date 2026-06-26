@@ -63,3 +63,12 @@ There are godchi skills that enforce these — `ml-data-leakage-guard`, `walk-fo
 
 - Layers map to DB schemas (`raw` / `staging` / `features`); keep raw data immutable and reproducible.
 - New specs/design docs go under `docs/superpowers/specs/` with a dated `YYYY-MM-DD-topic.md` name.
+
+## Commands (Stage 1)
+
+- Setup: `pip install -e ".[dev]"`
+- DB up: `docker compose up -d`
+- Run ingestion: `python -m gold_pipeline.ingestion.run`
+- Unit tests (no DB): `pytest -q -k "not raw_writer"`
+- All tests (DB up): `TEST_DATABASE_URL="postgresql+psycopg2://gold:gold@localhost:5432/gold_test" pytest -q`
+- Single test: `pytest tests/ingestion/test_sources_macro.py::test_fetch_fred_takes_first_release -v`
