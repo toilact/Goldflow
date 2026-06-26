@@ -15,5 +15,8 @@ Contract for a new source:
 Active sources: `gold_prices.py` (yfinance, ticker `GC=F`),
 `macro_fred.py` (FRED series `DGS10`, `DTWEXBGS`, `CPIAUCSL`).
 
-Point-in-time rule: macro sources MUST populate `release_date` from FRED
-`get_series_all_releases` (earliest `realtime_start` per observation), never the observation date.
+Point-in-time rule: macro sources MUST populate `release_date` with the date a value was
+actually published, never blindly the observation date. By series type (`VINTAGED_SERIES`):
+- Revised series (e.g. CPI): earliest `realtime_start` from `get_series_all_releases`.
+- Daily non-revised series (DGS10, DTWEXBGS): `get_series` + next-day release (avoids FRED's
+  ~2000-vintage limit); NaN holiday observations are dropped so no NULL-value rows reach raw.

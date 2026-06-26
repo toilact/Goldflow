@@ -33,5 +33,27 @@ def test_fetch_fred_empty_raises():
     with pytest.raises(ValueError, match="Empty"):
         fetch_fred_series("DGS10", client=Empty())
 
+def test_fetch_fred_daily_drops_nan_holidays():
+    # Daily series carry NaN on market holidays; those must not become NULL-value rows.
+    class NanFred:
+        def get_series(self, _):
+            idx = pd.to_datetime(["2020-01-01", "2020-01-02", "2020-01-03"])
+            return pd.Series([1.5, float("nan"), 1.7], index=idx)
+    df = fetch_fred_series("DGS10", client=NanFred())
+    assert len(df) == 2  # the NaN holiday row is dropped
+    assert df["value"].notna().all()
+    # next-day release approximation
+    assert df.iloc[0]["release_date"] == pd.Timestamp("2020-01-02")
+
+def test_fetch_fred_all_daily_no_nan_passes():
+    # A daily series with no NaN keeps every observation.
+    class CleanFred:
+        def get_series(self, _):
+            idx = pd.to_datetime(["2020-01-02", "2020-01-03"])
+            return pd.Series([1.5, 1.6], index=idx)
+    df = fetch_fred_series("DTWEXBGS", client=CleanFred())
+    assert len(df) == 2
+    assert list(df.columns) == ["date", "series_id", "value", "release_date"]
+
 def test_macro_series_constant():
     assert MACRO_SERIES == ("DGS10", "DTWEXBGS", "CPIAUCSL")
