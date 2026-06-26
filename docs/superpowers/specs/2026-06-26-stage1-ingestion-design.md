@@ -95,7 +95,24 @@ first = (all_rel.sort_values("realtime_start")
 
 `sqlalchemy.dialects.postgresql.insert(...).on_conflict_do_update(...)` is Postgres-only and fails
 on SQLite. **Resolution: tests use Postgres, not SQLite** — `docker-compose.yml` exposes a separate
-`gold_test` database (or test schema) on the same container.
+`gold_test` database on the same container.
+
+The official `postgres` image only creates the single DB named by `POSTGRES_DB`. To also create
+`gold_test`, mount an init script `db/init/01_create_test_db.sql` into
+`/docker-entrypoint-initdb.d/` (runs once on first container init):
+
+```sql
+-- db/init/01_create_test_db.sql
+CREATE DATABASE gold_test;
+```
+```yaml
+# docker-compose.yml (excerpt)
+    volumes:
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+      - pgdata:/var/lib/postgresql/data
+```
+Note: init scripts run only on an empty data volume; after changing them, recreate with
+`docker compose down -v`.
 
 Test split keeps the fast path DB-free:
 - `test_sources.py` — pure pandas, mocked `yfinance`/`fredapi` responses; asserts normalized columns,
