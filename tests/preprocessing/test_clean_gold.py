@@ -21,7 +21,7 @@ def test_log_return_is_per_source():
     a = _series([10, 11], source="GC=F")
     b = _series([200, 220], source="XAU/USD")
     out = clean_gold(pd.concat([a, b], ignore_index=True))
-    first_per_source = out.groupby("source")["log_return"].first()
+    first_per_source = out.groupby("source", sort=False).head(1)["log_return"]
     assert first_per_source.isna().all()
     gc = out[out["source"] == "GC=F"].reset_index(drop=True)
     assert gc.loc[1, "log_return"] == pytest.approx(np.log(11 / 10))

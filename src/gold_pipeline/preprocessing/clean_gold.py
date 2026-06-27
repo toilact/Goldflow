@@ -34,7 +34,7 @@ def _flag_outliers(df: pd.DataFrame, window: int, k: float) -> pd.Series:
     flags = pd.Series(False, index=df.index)
     for _src, idx in df.groupby("source").groups.items():
         ret = df.loc[idx, "log_return"]
-        med = ret.rolling(window, min_periods=1).median()
+        med = ret.rolling(window).median()
         mad = (ret - med).abs().rolling(window, min_periods=1).median()
         z = 0.6745 * (ret - med) / (mad + _MAD_EPS)
         cand = (z.abs() > k).fillna(False)
