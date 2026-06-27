@@ -13,7 +13,7 @@ from .config import Settings
 from .quality import check_gold, check_macro
 from .sources.gold_prices import fetch_gold_prices
 from .sources.macro_fred import MACRO_SERIES, fetch_fred_series
-from .storage.raw_writer import run_migrations, upsert_dataframe
+from ..db.writer import run_migrations, upsert_dataframe
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 log = logging.getLogger("ingestion.run")

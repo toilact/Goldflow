@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 from sqlalchemy import create_engine, text
 
-from gold_pipeline.ingestion.storage.raw_writer import run_migrations, upsert_dataframe
+from gold_pipeline.db.writer import run_migrations, upsert_dataframe
 
 TEST_URL = os.environ.get("TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(not TEST_URL, reason="TEST_DATABASE_URL not set / Postgres not up")
@@ -43,3 +43,26 @@ def test_upsert_updates_value(engine):
     with engine.begin() as c:
         close = c.execute(text("SELECT close FROM raw.gold_prices")).scalar()
     assert float(close) == 9.0
+
+
+def test_upsert_nullable_columns_written_as_sql_null(engine):
+    """pandas NaN/NaT/NA must reach Postgres as SQL NULL, not as literal strings."""
+    with engine.begin() as c:
+        c.execute(text("TRUNCATE staging.macro_aligned"))
+    df = pd.DataFrame({
+        "date": pd.to_datetime(["2020-05-05"]),
+        "series_id": ["CPIAUCSL"],
+        "value": [float("nan")],
+        "release_date": [pd.NaT],
+        "is_imputed": [False],
+        "days_stale": [pd.NA],
+        "is_anomaly": [False],
+    })
+    upsert_dataframe(engine, df, "macro_aligned", "staging", ["date", "series_id"])
+    with engine.begin() as c:
+        row = c.execute(
+            text("SELECT value IS NULL, release_date IS NULL, days_stale IS NULL FROM staging.macro_aligned")
+        ).fetchone()
+    assert row[0] is True, "value should be SQL NULL"
+    assert row[1] is True, "release_date should be SQL NULL"
+    assert row[2] is True, "days_stale should be SQL NULL"

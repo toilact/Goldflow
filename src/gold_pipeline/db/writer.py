@@ -1,5 +1,4 @@
-# src/gold_pipeline/ingestion/storage/raw_writer.py
-"""Idempotent writer for the raw layer using Postgres ON CONFLICT UPSERT."""
+"""Idempotent DB writer shared across pipeline stages (Postgres ON CONFLICT UPSERT)."""
 from __future__ import annotations
 
 import logging
@@ -30,7 +29,8 @@ def upsert_dataframe(
         return 0
     meta = MetaData()
     tbl = Table(table, meta, schema=schema, autoload_with=engine)
-    records = df.to_dict(orient="records")
+    # psycopg2 cannot adapt pandas NaN/NaT/NA; coerce all to Python None → SQL NULL
+    records = df.astype(object).where(pd.notna(df), None).to_dict(orient="records")
     stmt = insert(tbl).values(records)
     update_cols = {c: stmt.excluded[c] for c in df.columns if c not in pk}
     stmt = stmt.on_conflict_do_update(index_elements=pk, set_=update_cols)

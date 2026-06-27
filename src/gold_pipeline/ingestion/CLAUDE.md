@@ -11,7 +11,7 @@ See the design spec: docs/superpowers/specs/2026-06-26-stage1-ingestion-design.m
 - `config.py` — env -> `Settings`.
 - `http.py` — `with_retry` / `rate_limited`; ALL external calls go through these.
 - `sources/` — return normalized DataFrames (see sources/CLAUDE.md).
-- `storage/` — only path to the DB; idempotent UPSERT (see storage/CLAUDE.md).
+- `gold_pipeline.db` (`writer`/`reader`) — shared DB layer; only path to the DB; idempotent UPSERT (see ../db/CLAUDE.md).
 - `quality.py` — fail-fast gate before any write.
 - `run.py` — wires the above; `run_ingestion(...)` takes injectable seams for tests.
 

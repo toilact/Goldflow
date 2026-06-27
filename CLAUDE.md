@@ -72,3 +72,9 @@ There are godchi skills that enforce these — `ml-data-leakage-guard`, `walk-fo
 - Unit tests (no DB): `pytest -q -k "not raw_writer"`
 - All tests (DB up): `TEST_DATABASE_URL="postgresql+psycopg2://gold:gold@localhost:5432/gold_test" pytest -q`
 - Single test: `pytest tests/ingestion/test_sources_macro.py::test_fetch_fred_takes_first_release -v`
+
+## Commands (Stage 2)
+
+- Run preprocessing: `python -m gold_pipeline.preprocessing.run` (needs `raw` populated by Stage 1)
+- Unit tests (no DB): `pytest -q -k "not test_writer and not test_reader"`
+- DB integration tests: `TEST_DATABASE_URL="postgresql+psycopg2://gold:gold@localhost:5432/gold_test" pytest -q tests/db`
