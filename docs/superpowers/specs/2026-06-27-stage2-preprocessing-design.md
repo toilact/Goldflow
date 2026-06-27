@@ -43,8 +43,7 @@ src/gold_pipeline/
 │   ├── CLAUDE.md
 │   ├── writer.py            # run_migrations, upsert_dataframe (moved from ingestion/storage/raw_writer.py)
 │   └── reader.py            # read_table(engine, schema, table) -> DataFrame
-├── ingestion/               # Stage 1 — imports updated to ..db; behavior unchanged
-│   └── storage/             # raw_writer.py becomes a thin re-export of ..db.writer (back-compat)
+├── ingestion/               # Stage 1 — imports updated to ..db.writer; storage/ removed; behavior unchanged
 └── preprocessing/           # NEW — Stage 2
     ├── __init__.py
     ├── CLAUDE.md            # Stage-2 rules: calendar, point-in-time align, flag-don't-mutate
@@ -80,11 +79,23 @@ backwards dependency (`preprocessing` → `ingestion`).
   Identical logic to the current `raw_writer.py` (Postgres `INSERT ... ON CONFLICT (pk) DO UPDATE`).
 - `db/reader.py` — `read_table(engine, schema, table) -> pd.DataFrame` (a thin `SELECT *`), used by
   Stage 2 to load `raw.gold_prices` / `raw.macro_indicators`.
-- `ingestion/storage/raw_writer.py` — becomes a thin re-export (`from gold_pipeline.db.writer import
-  run_migrations, upsert_dataframe`) so Stage 1 code and its `run.py` keep working unchanged.
+- `ingestion/storage/` — **removed entirely** (no leftover re-export shim). Stage 1's only consumer,
+  `ingestion/run.py:16`, switches its import to `from ..db.writer import run_migrations, upsert_dataframe`.
 
-The moved writer test goes to `tests/db/test_writer.py`; `tests/db/test_reader.py` is new. Both are
-integration tests against the Postgres `gold_test` DB and skip when `TEST_DATABASE_URL` is unset.
+**Import-audit of existing Stage 1 code/tests (verified against the current tree):**
+
+| File | Today | After refactor |
+|---|---|---|
+| `src/.../ingestion/run.py` | `from .storage.raw_writer import run_migrations, upsert_dataframe` | `from ..db.writer import run_migrations, upsert_dataframe` |
+| `src/.../ingestion/storage/{raw_writer.py,__init__.py,CLAUDE.md}` | exists | deleted (logic + doc moved to `db/`) |
+| `tests/ingestion/test_raw_writer.py` | `from gold_pipeline.ingestion.storage.raw_writer import ...` | moved → `tests/db/test_writer.py`, import `from gold_pipeline.db.writer import ...` |
+| `tests/ingestion/test_run.py` | `monkeypatch.setattr(run_mod, "upsert_dataframe", ...)` | **unchanged** — patches `run.py`'s namespace, which still binds the name |
+| `tests/ingestion/test_sources_*.py`, `test_config.py`, `test_http.py`, `test_quality.py` | no storage import | unchanged |
+
+After the move, `tests/db/` holds `test_writer.py` (relocated) and `test_reader.py` (new) — both
+integration tests against the Postgres `gold_test` DB that skip when `TEST_DATABASE_URL` is unset.
+A full `pytest -q` run after the refactor (before any Stage 2 logic) is the gate that proves no
+import is left dangling.
 
 ## 5. Database schema (`002_staging_schema.sql`)
 
@@ -132,18 +143,27 @@ are permitted (DQ forbids NULLs only in key columns).
 
 `clean_gold(gold_df: pd.DataFrame) -> pd.DataFrame`
 
-1. Sort by `date`, assert no duplicate `(date, source)`.
-2. `log_return = log(close / close.shift(1))` (first row NaN).
-3. **Outlier flag (flag-only, trailing, robust):**
-   - Robust z-score `z_t = 0.6745 · (ret_t − median) / MAD`, where `median`/`MAD` are over a trailing
-     rolling window (default 21, **past-only** — no centering, no future). MAD = median absolute
-     deviation. Rows with too-short a window (the first ~21) get `is_outlier = false`.
-   - Candidate outliers: `|z_t| > k` (default `k = 5`).
-4. **Anti-propagation to `t+1` (spike-then-revert collapse):** a single bad price produces two
-   anomalous returns — the spike at `t` and the mechanical reversion at `t+1` (opposite sign). When
-   `t` and `t+1` are both candidates **with opposite signs**, flag `is_outlier` only at `t` (the price
-   event) and clear the induced flag at `t+1`. Same-sign consecutive candidates are left as-is (a real
-   two-day move, not a single-price artifact).
+**All time-series operations are computed per `source` (`groupby("source")`)** — `raw.gold_prices` is
+keyed `(date, source)` and a second source (`XAU/USD`) is a planned addition, so a bare `shift`/`rolling`
+over the whole frame would splice one source's prices onto another's at the group boundary. Use
+`transform` (not `apply(lambda)`) to keep index alignment exact.
+
+1. Sort by `(source, date)`; assert no duplicate `(date, source)`.
+2. Per source: `log_return = log(close / close.shift(1))` (first row of each source = NaN), e.g.
+   `df.groupby("source")["close"].transform(lambda s: np.log(s / s.shift(1)))`.
+3. **Outlier flag (flag-only, trailing, robust) — within each source:**
+   - Robust z-score `z_t = 0.6745 · (ret_t − median) / (MAD + ε)`, with `ε = 1e-8` guarding against
+     `MAD = 0` (flat-return stretches over holidays/illiquidity would otherwise divide by zero and
+     emit `inf`/`NaN`, crashing the run). `median`/`MAD` are over a trailing rolling window
+     (default 21, **past-only** — no centering, no future), computed per source. MAD = median absolute
+     deviation. Rows with too-short a window (the first ~21 of each source) get `is_outlier = false`.
+   - Candidate outliers: `|z_t| > k` (default `k = 5`). The `ε` floor keeps genuinely flat windows at
+     `z ≈ 0` while still flagging a real jump that lands inside a flat stretch.
+4. **Anti-propagation to `t+1` (spike-then-revert collapse), within each source:** a single bad price
+   produces two anomalous returns — the spike at `t` and the mechanical reversion at `t+1` (opposite
+   sign). When `t` and `t+1` are both candidates **with opposite signs** (and belong to the same
+   source), flag `is_outlier` only at `t` (the price event) and clear the induced flag at `t+1`.
+   Same-sign consecutive candidates are left as-is (a real two-day move, not a single-price artifact).
 5. Values are **never mutated** — `is_outlier` is a flag downstream stages decide how to use.
 
 Output columns: `date, open, high, low, close, volume, log_return, is_outlier, source`.
@@ -194,13 +214,18 @@ and adjust.
 Fail-fast, before any write (structural correctness; deeper business checks belong to later stages).
 
 `check_staging_gold(df)` raises `DataQualityError` on:
-- NULL in key columns (`date`, `source`); duplicate `(date, source)`; `date` not monotonically increasing.
+- NULL in key columns (`date`, `source`); duplicate `(date, source)`; `date` not monotonically
+  increasing **within each source** (checked per `source` group, since multiple sources interleave).
 - OHLC logic violation (`high < low`, or `close` outside `[low, high]`) on non-outlier rows.
 
 `check_staging_macro(df)` raises `DataQualityError` on:
 - NULL in key columns (`date`, `series_id`); duplicate `(date, series_id)`.
 - **Point-in-time invariant:** any row with non-NULL `release_date` where `release_date > date`
   (a future-dated value leaking into the present) — this is the core leakage guard.
+- **Cold-start co-null consistency:** every row must be in exactly one of two states — both `value`
+  and `release_date` NULL (no release published yet), or both NOT NULL. A half-populated row (`value`
+  present but `release_date` missing, or vice versa) raises. `days_stale`/`is_imputed` must follow
+  `release_date`: NULL iff `release_date` is NULL.
 - `days_stale < 0` for any non-NULL row.
 
 `is_outlier` / `is_anomaly` are flags, NOT gate failures — flagged rows still pass and get written.
@@ -228,13 +253,16 @@ Mirrors Stage 1's split — fast unit path is DB-free.
 
 - **Unit (pure pandas, no DB) — `tests/preprocessing/`:**
   - `test_calendar.py` — dedup/sort; calendar derives from gold dates only.
-  - `test_clean_gold.py` — `log_return` correctness; robust outlier flag; **spike-then-revert does NOT
-    flag `t+1`**; same-sign consecutive moves both flagged.
+  - `test_clean_gold.py` — `log_return` correctness; **per-source isolation** (two sources don't bleed
+    across the `groupby` boundary in `shift`/rolling); robust outlier flag; **flat-return window
+    (MAD=0) does not crash and is not flagged** (ε guard); **spike-then-revert does NOT flag `t+1`**;
+    same-sign consecutive moves both flagged.
   - `test_align_macro.py` — `merge_asof` backward picks latest release `<= T`; CPI carried forward with
-    `is_imputed`/`days_stale`; leading rows NULL; **every row satisfies `release_date <= date`**;
-    `is_anomaly` bounds + staleness.
+    `is_imputed`/`days_stale`; leading rows co-NULL (`value` and `release_date` both NULL); **every row
+    satisfies `release_date <= date`**; `is_anomaly` bounds + staleness.
   - `test_quality.py` — each gate raises on its violation, passes on clean data; PIT invariant raises
-    when `release_date > date`.
+    when `release_date > date`; **co-null consistency raises on a half-populated row** (value without
+    release_date and vice versa); per-source monotonic check.
 - **Integration (Postgres `gold_test`) — `tests/db/`:**
   - `test_writer.py` (moved) — UPSERT idempotency + update-on-conflict.
   - `test_reader.py` — `read_table` round-trips a written frame.
@@ -257,8 +285,10 @@ split · news/sentiment · `features`/packaging layers · workflow orchestration
 
 ## 13. Open assumptions (made explicit)
 
-- Outlier window `21`, threshold `k = 5`, and the macro bounds/staleness ceilings in §7a are starting
-  defaults, tunable later; they are flags, so changing them never corrupts stored values.
+- Outlier window `21`, threshold `k = 5`, MAD floor `ε = 1e-8`, and the macro bounds/staleness ceilings
+  in §7a are starting defaults, tunable later; they are flags, so changing them never corrupts values.
+- All gold time-series math is grouped by `source`; today only `GC=F` exists, but the grouping is the
+  cheap, correct default that keeps a future `XAU/USD` source from contaminating returns/outliers.
 - The trading calendar is exactly the set of dates present in `raw.gold_prices` (no external exchange
   calendar dependency).
 - Stage 2 reads the full `raw` history each run and UPSERTs; incremental/windowed runs are a later
