@@ -13,3 +13,9 @@ for the implementation plan.
 ## Test
 - `pytest -q -k "not raw_writer"` — fast unit tests, no DB
 - `TEST_DATABASE_URL=postgresql+psycopg2://gold:gold@localhost:5432/gold_test pytest -q` — incl. integration
+
+## Stage 2 — Preprocessing (`staging`)
+
+Reads `raw`, cleans gold (per-source log-return + robust outlier flag), and reindexes macro onto the
+gold trading calendar point-in-time (`merge_asof` backward on `release_date`). Run after Stage 1:
+`python -m gold_pipeline.preprocessing.run`.
