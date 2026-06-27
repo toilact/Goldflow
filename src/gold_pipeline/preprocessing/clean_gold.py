@@ -34,6 +34,12 @@ def _flag_outliers(df: pd.DataFrame, window: int, k: float) -> pd.Series:
     flags = pd.Series(False, index=df.index)
     for _src, idx in df.groupby("source").groups.items():
         ret = df.loc[idx, "log_return"]
+        # `med` keeps the default full-window warmup, so it stays NaN for the first
+        # `window` rows and those rows are never flagged (spec: "first ~21 false").
+        # `mad`'s min_periods=1 is LOAD-BEARING, not cosmetic: once `med` goes live the
+        # deviation series has only ~`window` recent non-NaN values in the next window,
+        # so a default-warmup `mad` would stay NaN for a SECOND window and miss a spike
+        # landing just after warmup. Do not "symmetrize" these two rolling calls.
         med = ret.rolling(window).median()
         mad = (ret - med).abs().rolling(window, min_periods=1).median()
         z = 0.6745 * (ret - med) / (mad + _MAD_EPS)
