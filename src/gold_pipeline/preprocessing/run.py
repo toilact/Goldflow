@@ -31,6 +31,10 @@ def run_preprocessing(engine, gold_reader, macro_reader) -> dict[str, int]:
     gold_staged = clean_gold(raw_gold)
     check_staging_gold(gold_staged)
 
+    # Only upsert the staging-schema columns (drop raw-only cols like ingested_at).
+    _GOLD_STAGING_COLS = ["date", "open", "high", "low", "close", "volume", "log_return", "is_outlier", "source"]
+    gold_to_write = gold_staged[[c for c in _GOLD_STAGING_COLS if c in gold_staged.columns]]
+
     days = trading_days(raw_gold)
     macro_staged = pd.concat(
         [
@@ -43,7 +47,7 @@ def run_preprocessing(engine, gold_reader, macro_reader) -> dict[str, int]:
 
     counts = {
         "gold_prices": upsert_dataframe(
-            engine, gold_staged, "gold_prices", "staging", ["date", "source"]
+            engine, gold_to_write, "gold_prices", "staging", ["date", "source"]
         ),
         "macro_aligned": upsert_dataframe(
             engine, macro_staged, "macro_aligned", "staging", ["date", "series_id"]
