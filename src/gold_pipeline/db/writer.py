@@ -1,5 +1,4 @@
-# src/gold_pipeline/ingestion/storage/raw_writer.py
-"""Idempotent writer for the raw layer using Postgres ON CONFLICT UPSERT."""
+"""Idempotent DB writer shared across pipeline stages (Postgres ON CONFLICT UPSERT)."""
 from __future__ import annotations
 
 import logging

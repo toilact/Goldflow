@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 from sqlalchemy import create_engine, text
 
-from gold_pipeline.ingestion.storage.raw_writer import run_migrations, upsert_dataframe
+from gold_pipeline.db.writer import run_migrations, upsert_dataframe
 
 TEST_URL = os.environ.get("TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(not TEST_URL, reason="TEST_DATABASE_URL not set / Postgres not up")
