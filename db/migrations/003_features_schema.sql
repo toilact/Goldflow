@@ -1,0 +1,48 @@
+CREATE SCHEMA IF NOT EXISTS features;
+
+-- Wide, model-ready feature table. Columns MUST match
+-- gold_pipeline.features.config.feature_table_columns(DEFAULT_CONFIG).
+-- Changing windows/lags/horizons that add or rename columns requires a new migration.
+CREATE TABLE IF NOT EXISTS features.gold_features (
+    date            DATE NOT NULL,
+    source          TEXT NOT NULL,
+    close           NUMERIC(12,4),
+    log_return      NUMERIC(12,8),
+    sma_10          NUMERIC(14,6),
+    sma_20          NUMERIC(14,6),
+    ema_12          NUMERIC(14,6),
+    ema_26          NUMERIC(14,6),
+    rsi_14          NUMERIC(14,6),
+    macd            NUMERIC(14,6),
+    macd_signal     NUMERIC(14,6),
+    macd_diff       NUMERIC(14,6),
+    bb_high         NUMERIC(14,6),
+    bb_mid          NUMERIC(14,6),
+    bb_low          NUMERIC(14,6),
+    close_to_sma_10 NUMERIC(14,6),
+    close_to_sma_20 NUMERIC(14,6),
+    dgs10           NUMERIC(14,6),
+    dtwexbgs        NUMERIC(14,6),
+    cpiaucsl        NUMERIC(14,6),
+    dgs10_is_imputed     BOOLEAN,
+    dgs10_is_anomaly     BOOLEAN,
+    dtwexbgs_is_imputed  BOOLEAN,
+    dtwexbgs_is_anomaly  BOOLEAN,
+    cpiaucsl_is_imputed  BOOLEAN,
+    cpiaucsl_is_anomaly  BOOLEAN,
+    logret_lag_1    NUMERIC(12,8),
+    logret_lag_2    NUMERIC(12,8),
+    logret_lag_3    NUMERIC(12,8),
+    logret_lag_5    NUMERIC(12,8),
+    rsi_14_lag_1    NUMERIC(14,6),
+    rsi_14_lag_2    NUMERIC(14,6),
+    rsi_14_lag_3    NUMERIC(14,6),
+    rsi_14_lag_5    NUMERIC(14,6),
+    target_logret_1 NUMERIC(12,8),
+    target_logret_5 NUMERIC(12,8),
+    has_features    BOOLEAN NOT NULL DEFAULT false,
+    has_target_1    BOOLEAN NOT NULL DEFAULT false,
+    has_target_5    BOOLEAN NOT NULL DEFAULT false,
+    processed_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (date, source)
+);
