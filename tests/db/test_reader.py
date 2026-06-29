@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 from sqlalchemy import create_engine, text
@@ -34,3 +35,8 @@ def test_read_table_round_trips(engine):
     assert len(out) == 1
     assert float(out.iloc[0]["close"]) == 2.0
     assert out.iloc[0]["source"] == "GC=F"
+    # Regression: NUMERIC columns must come back as float64, not decimal.Decimal.
+    # An earlier implementation used mappings().fetchall() which returned Decimal,
+    # causing np.log to raise TypeError in Stage 2's clean_gold path.
+    assert out["close"].dtype.kind == "f", f"expected float dtype, got {out['close'].dtype}"
+    _ = np.log(out["close"])  # must not raise on Decimal
