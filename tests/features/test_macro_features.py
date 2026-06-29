@@ -1,4 +1,5 @@
 import pandas as pd
+import pytest
 from gold_pipeline.features.macro_features import build_macro_wide
 
 
@@ -33,3 +34,14 @@ def test_carries_confidence_flags():
     assert bool(row["dgs10_is_imputed"]) is True
     assert bool(row["dtwexbgs_is_imputed"]) is False
     assert bool(row["cpiaucsl_is_anomaly"]) is False
+
+    # Assert boolean dtype to catch float-coercion regressions
+    assert pd.api.types.is_bool_dtype(wide["dgs10_is_imputed"])
+    assert pd.api.types.is_bool_dtype(wide["dgs10_is_anomaly"])
+
+
+def test_duplicate_key_raises():
+    df = _long()
+    df = pd.concat([df, df.iloc[[0]]], ignore_index=True)
+    with pytest.raises(ValueError, match="duplicate"):
+        build_macro_wide(df)

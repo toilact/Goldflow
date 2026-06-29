@@ -15,6 +15,9 @@ def build_macro_wide(macro_df: pd.DataFrame) -> pd.DataFrame:
     df = macro_df.copy()
     df["date"] = pd.to_datetime(df["date"]).dt.tz_localize(None)
 
+    if df.duplicated(subset=["date", "series_id"]).any():
+        raise ValueError("duplicate (date, series_id) rows in macro input")
+
     # Group by date, then pivot series to columns
     pivoted = df.pivot_table(
         index="date",
