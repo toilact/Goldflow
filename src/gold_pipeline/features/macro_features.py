@@ -13,7 +13,12 @@ from .config import MACRO_SERIES_IDS
 
 def build_macro_wide(macro_df: pd.DataFrame) -> pd.DataFrame:
     df = macro_df.copy()
-    df["date"] = pd.to_datetime(df["date"]).dt.tz_localize(None)
+    # Use DatetimeIndex constructor to avoid pd.to_datetime internal .map() which
+    # triggers a Bus error on Python 3.13/macOS Apple Silicon with datetime64 input.
+    dti = pd.DatetimeIndex(df["date"])
+    if dti.tz is not None:
+        dti = dti.tz_convert(None)
+    df["date"] = dti.as_unit("ns")
 
     if df.duplicated(subset=["date", "series_id"]).any():
         raise ValueError("duplicate (date, series_id) rows in macro input")
