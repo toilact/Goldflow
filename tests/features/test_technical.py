@@ -32,22 +32,17 @@ def test_ratio_feature_is_close_over_sma():
 
 
 def test_per_source_isolation_no_bleed():
-    # Two sources; the SMA of source B must not pull rows from source A.
-    # Verify by computing each source independently and comparing results.
+    # Two sources; SMA of source B within the COMBINED frame must equal the
+    # SMA computed on source B alone (no bleed from source A across the boundary).
     a = _gold(list(np.linspace(100, 130, 40)), source="GC=F")
-    b = _gold(list(np.linspace(2000, 2050, 40)), source="XAU/USD")
-    combined = pd.concat([a, b], ignore_index=True)
-    out_combined = add_technical(combined)
-
-    # Compute source B independently
-    out_b_alone = add_technical(b)
-
-    # Extract the last 40 rows from combined (which should be source XAU/USD)
-    # Verify they match the independent computation
-    assert len(out_combined) == 80
-    ref_b = ta.trend.sma_indicator(pd.Series(list(np.linspace(2000, 2050, 40))), window=10)
+    b_closes = list(np.linspace(2000, 2050, 40))
+    b = _gold(b_closes, source="XAU/USD")
+    out = add_technical(pd.concat([a, b], ignore_index=True))
+    # Extract source B rows using iloc (last 40 rows after concat, since B was second)
+    b_out = out.iloc[40:].sort_values("date").reset_index(drop=True)
+    ref_b = ta.trend.sma_indicator(pd.Series(b_closes), window=10)
     np.testing.assert_allclose(
-        out_b_alone["sma_10"].to_numpy(dtype=float), ref_b.to_numpy(dtype=float), equal_nan=True
+        b_out["sma_10"].to_numpy(dtype=float), ref_b.to_numpy(dtype=float), equal_nan=True
     )
 
 
