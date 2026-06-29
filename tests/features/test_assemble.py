@@ -45,3 +45,11 @@ def test_no_rows_dropped():
     g = _gold(60)
     out = assemble_features(g, _macro(g["date"]))
     assert len(out) == 60
+
+
+def test_macro_columns_populated():
+    g = _gold(60)
+    out = assemble_features(g, _macro(g["date"]))
+    assert out["dgs10"].notna().all()
+    assert out["dtwexbgs"].notna().all()
+    assert out["cpiaucsl"].notna().all()
