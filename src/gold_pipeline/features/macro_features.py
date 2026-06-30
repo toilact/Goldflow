@@ -36,14 +36,16 @@ def build_macro_wide(macro_df: pd.DataFrame) -> pd.DataFrame:
     result["date"] = pivoted.index
     result.reset_index(drop=True, inplace=True)
 
-    # Build value and flag columns in a predictable order
+    # Build value and flag columns in a predictable order. Every expected series
+    # must be present — a missing one means upstream staging is incomplete, which
+    # we surface explicitly rather than letting it fall through to a confusing
+    # "column mismatch" in the quality gate.
     for sid in MACRO_SERIES_IDS:
         col = sid.lower()
-        if ("value", sid) in pivoted.columns:
-            result[col] = pivoted[("value", sid)].values
-        if ("is_imputed", sid) in pivoted.columns:
-            result[f"{col}_is_imputed"] = pivoted[("is_imputed", sid)].values
-        if ("is_anomaly", sid) in pivoted.columns:
-            result[f"{col}_is_anomaly"] = pivoted[("is_anomaly", sid)].values
+        if ("value", sid) not in pivoted.columns:
+            raise ValueError(f"macro series {sid} missing from staging.macro_aligned")
+        result[col] = pivoted[("value", sid)].values
+        result[f"{col}_is_imputed"] = pivoted[("is_imputed", sid)].values
+        result[f"{col}_is_anomaly"] = pivoted[("is_anomaly", sid)].values
 
     return result

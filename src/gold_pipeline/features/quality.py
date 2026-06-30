@@ -47,12 +47,18 @@ def check_features(df: pd.DataFrame, cfg: FeatureConfig = DEFAULT_CONFIG) -> Non
             if not (got[both].to_numpy() == expected_t[both].to_numpy()).all():
                 raise FeatureQualityError(f"target_logret_{h} != future log_return ({source})")
 
-    # 5. NaN only where a readiness flag is False.
+    # 5. Readiness flags match their contract, both directions. We recompute the
+    #    flags independently from the data columns and compare to the stored flags:
+    #    a True flag over NaN data would leak NaN into the model; a False flag over
+    #    complete data would silently drop a usable row. The one-directional NaN
+    #    check this replaces only caught the former.
     wcols = warmup_columns(cfg)
-    feat_ready = df["has_features"].astype(bool)
-    if df.loc[feat_ready, wcols].isna().any().any():
-        raise FeatureQualityError("NaN in warmup columns where has_features is True")
+    expected_feat = df[wcols].notna().all(axis=1).to_numpy()
+    if not (df["has_features"].astype(bool).to_numpy() == expected_feat).all():
+        raise FeatureQualityError("has_features disagrees with warmup-column NaN pattern")
     for h in cfg.horizons:
-        ready = df[f"has_target_{h}"].astype(bool)
-        if df.loc[ready, f"target_logret_{h}"].isna().any():
-            raise FeatureQualityError(f"NaN target_logret_{h} where has_target_{h} is True")
+        expected_t = df[f"target_logret_{h}"].notna().to_numpy()
+        if not (df[f"has_target_{h}"].astype(bool).to_numpy() == expected_t).all():
+            raise FeatureQualityError(
+                f"has_target_{h} disagrees with target_logret_{h} NaN pattern"
+            )

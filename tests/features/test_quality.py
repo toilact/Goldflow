@@ -50,3 +50,28 @@ def test_unexpected_nan_outside_warmup_raises():
     df.loc[59, "rsi_14"] = np.nan  # row 59 is past warmup -> illegal NaN
     with pytest.raises(FeatureQualityError, match="NaN"):
         check_features(df)
+
+
+def test_corrupted_has_features_flag_raises():
+    df = _good()
+    # Flag claims ready but row 0 is warmup (features are NaN) -> contradiction.
+    df.loc[0, "has_features"] = True
+    with pytest.raises(FeatureQualityError, match="has_features"):
+        check_features(df)
+
+
+def test_corrupted_has_target_flag_raises():
+    df = _good()
+    # Tail row has no future return (target is NaN) but the flag claims it does.
+    df.loc[df.index[-1], "has_target_1"] = True
+    with pytest.raises(FeatureQualityError, match="has_target_1"):
+        check_features(df)
+
+
+def test_flag_false_but_features_present_raises():
+    df = _good()
+    # Reverse direction: a fully-populated row flagged not-ready would silently
+    # drop a usable training row. The old NaN-only check missed this.
+    df.loc[59, "has_features"] = False
+    with pytest.raises(FeatureQualityError, match="has_features"):
+        check_features(df)

@@ -45,3 +45,10 @@ def test_duplicate_key_raises():
     df = pd.concat([df, df.iloc[[0]]], ignore_index=True)
     with pytest.raises(ValueError, match="duplicate"):
         build_macro_wide(df)
+
+
+def test_missing_series_raises_clearly():
+    df = _long()
+    df = df[df["series_id"] != "CPIAUCSL"]  # drop an expected macro series
+    with pytest.raises(ValueError, match="CPIAUCSL"):
+        build_macro_wide(df)
